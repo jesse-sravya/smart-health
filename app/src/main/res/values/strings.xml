@@ -4,4 +4,5 @@
     <string name="title_profile">Profile</string>
     <string name="title_scan">Scan QR</string>
     <string name="title_notifications">Notifications</string>
+    <string name="scan_barcode">Scan code now</string>
 </resources>
