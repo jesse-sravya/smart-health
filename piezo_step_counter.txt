@@ -1,0 +1,61 @@
+#include <SoftwareSerial.h>
+SoftwareSerial BTserial(7, 6);
+
+int sensorPiezoF = A0;    // piezo input
+int sensorValueF = 0; 
+int sensorValueBeforeF = 0;
+int tempF;
+
+int sensorPiezoB = A2;    // piezo input
+int sensorValueB = 0; 
+int sensorValueBeforeB = 0;
+int tempB;
+
+void setup() {
+///Serial.begin(9600);  
+///Serial.println("WELCOME!!!");
+BTserial.begin(9600);
+//Serial.println();
+}
+
+void loop() {
+
+tempF = analogRead(sensorPiezoF);
+sensorValueF = (tempF-5);    // read the value from the sensor:
+//Serial.println(sensorValueF);    // tell the value from the sensor:
+
+tempB = analogRead(sensorPiezoB);
+sensorValueB = (tempB-5);    // read the value from the sensor:
+//Serial.println(sensorValueB);    // tell the value from the sensor:
+
+if (sensorValueF > 500) {
+    if (sensorValueF != sensorValueBeforeF)
+    {
+      ///Serial.println("FT");
+      BTserial.print("F");
+      //Serial.print("\t");
+      ///Serial.println(sensorValueF);
+      delay(100);
+    }
+}   
+
+if (sensorValueB > 500) {
+    if (sensorValueB != sensorValueBeforeB)
+    {
+      ///Serial.println("RT");
+      BTserial.print("R");
+      //Serial.print("\t");
+      ///Serial.println(sensorValueB);
+      delay(100);
+    }
+}
+else
+{
+  ///Serial.println("-_-");
+  delay(100);
+}
+    
+delay(50);
+sensorValueBeforeF=sensorValueF;
+sensorValueBeforeB=sensorValueB;
+}
