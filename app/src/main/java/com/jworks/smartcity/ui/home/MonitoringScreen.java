@@ -2,15 +2,22 @@ package com.jworks.smartcity.ui.home;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.os.Handler;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -129,6 +136,7 @@ public class MonitoringScreen extends Activity {
                                     if (full_text.length() >= SOS_PATTERN_LENGTH) {
                                         if (SOS_PATTERN.matches(full_text.substring(full_text.length() - SOS_PATTERN_LENGTH))) {
                                             msg("ALERT EMERGENCY CONTACTS");
+                                            sendAlert();
                                         }
                                     }
 
@@ -283,6 +291,88 @@ public class MonitoringScreen extends Activity {
             progressDialog.dismiss();
         }
 
+    }
+
+
+    private void sendAlert() {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(MonitoringScreen.this);
+
+        // set title
+        alertDialogBuilder.setTitle("SOS generated");
+
+        // set dialog message
+        alertDialogBuilder
+                .setMessage("Looks like you're in danger, if you think this alert is a mistake, click below to dismiss.")
+                .setCancelable(true)
+                .setNegativeButton("ABORT",new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        // create alert dialog
+        AlertDialog alertDialog = alertDialogBuilder.create();
+
+        alertDialog.setOnShowListener(new DialogInterface.OnShowListener() {
+            private static final int AUTO_DISMISS_MILLIS = 10000;
+            @Override
+            public void onShow(final DialogInterface dialog) {
+                final Button defaultButton = ((AlertDialog) alertDialog).getButton(AlertDialog.BUTTON_NEGATIVE);
+                final CharSequence negativeButtonText = defaultButton.getText();
+                new CountDownTimer(AUTO_DISMISS_MILLIS, 100) {
+                    @Override
+                    public void onTick(long millisUntilFinished) {
+                        defaultButton.setText(String.format(
+                                Locale.getDefault(), "%s (%d)",
+                                negativeButtonText,
+                                TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) + 1 //add one so it never displays zero
+                        ));
+                    }
+                    @Override
+                    public void onFinish() {
+                        if (((AlertDialog) dialog).isShowing()) {
+                            dialog.dismiss();
+                        }
+                    }
+                }.start();
+            }
+        });
+
+        // show it
+        alertDialog.show();
+
+        // Hide after some seconds
+        final Handler handler  = new Handler();
+        final Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                if (alertDialog.isShowing()) {
+                    alertDialog.dismiss();
+
+                    // send alert
+                    AlertDialog.Builder alertDialogBuilder2 = new AlertDialog.Builder(MonitoringScreen.this);
+                    alertDialogBuilder2.setTitle("SOS sent!");
+                    alertDialogBuilder2
+                            .setMessage("");
+
+                    // create alert dialog
+                    AlertDialog alertDialog = alertDialogBuilder2.create();
+
+                    // show it
+                    alertDialog.show();
+                }
+            }
+        };
+
+
+        alertDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialog) {
+                handler.removeCallbacks(runnable);
+            }
+        });
+
+        handler.postDelayed(runnable, 10000);
     }
 
 

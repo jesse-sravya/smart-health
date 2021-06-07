@@ -1,19 +1,18 @@
 package com.jworks.smartcity.ui.home;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
-import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
-import android.os.ParcelUuid;
-import android.service.controls.Control;
+import android.os.CountDownTimer;
+import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,35 +20,29 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+
 import com.google.android.gms.maps.GoogleMap;
-
-
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
+import com.jworks.smartcity.MainActivity;
 import com.jworks.smartcity.R;
 
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Locale;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static android.R.layout.simple_list_item_1;
-import static android.bluetooth.BluetoothProfile.GATT;
-import static android.content.ContentValues.TAG;
 import static android.content.Context.LOCATION_SERVICE;
+
+//import android.app.AlertDialog;
 
 public class HomeFragment extends Fragment {
 
@@ -138,11 +131,12 @@ public class HomeFragment extends Fragment {
         mDiscoverBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!mBlueAdapter.isDiscovering()){
-                    showToast("Making Your Device Discoverable");
-                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
-                    startActivityForResult(intent, REQUEST_DISCOVER_BT);
-                }
+//                if (!mBlueAdapter.isDiscovering()){
+//                    showToast("Making Your Device Discoverable");
+//                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+//                    startActivityForResult(intent, REQUEST_DISCOVER_BT);
+//                }
+                sendAlert();
             }
         });
 
@@ -172,6 +166,87 @@ public class HomeFragment extends Fragment {
                 }
             }
         });
+    }
+
+    private void sendAlert() {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getContext());
+
+        // set title
+        alertDialogBuilder.setTitle("SOS generated");
+
+        // set dialog message
+        alertDialogBuilder
+                .setMessage("Looks like you're in danger, if you think this alert is a mistake, click below to dismiss.")
+                .setCancelable(true)
+                .setNegativeButton("ABORT",new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        // create alert dialog
+        AlertDialog alertDialog = alertDialogBuilder.create();
+
+        alertDialog.setOnShowListener(new DialogInterface.OnShowListener() {
+            private static final int AUTO_DISMISS_MILLIS = 10000;
+            @Override
+            public void onShow(final DialogInterface dialog) {
+                final Button defaultButton = ((AlertDialog) alertDialog).getButton(AlertDialog.BUTTON_NEGATIVE);
+                final CharSequence negativeButtonText = defaultButton.getText();
+                new CountDownTimer(AUTO_DISMISS_MILLIS, 100) {
+                    @Override
+                    public void onTick(long millisUntilFinished) {
+                        defaultButton.setText(String.format(
+                                Locale.getDefault(), "%s (%d)",
+                                negativeButtonText,
+                                TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) + 1 //add one so it never displays zero
+                        ));
+                    }
+                    @Override
+                    public void onFinish() {
+                        if (((AlertDialog) dialog).isShowing()) {
+                            dialog.dismiss();
+                        }
+                    }
+                }.start();
+            }
+        });
+
+        // show it
+        alertDialog.show();
+
+        // Hide after some seconds
+        final Handler handler  = new Handler();
+        final Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                if (alertDialog.isShowing()) {
+                    alertDialog.dismiss();
+
+                    // send alert
+                    AlertDialog.Builder alertDialogBuilder2 = new AlertDialog.Builder(getContext());
+                    alertDialogBuilder2.setTitle("SOS sent!");
+                    alertDialogBuilder2
+                            .setMessage("");
+
+                    // create alert dialog
+                    AlertDialog alertDialog = alertDialogBuilder2.create();
+
+                    // show it
+                    alertDialog.show();
+                }
+            }
+        };
+
+
+        alertDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface dialog) {
+                handler.removeCallbacks(runnable);
+            }
+        });
+
+        handler.postDelayed(runnable, 10000);
     }
 
     private void pairedDevicesList() {
