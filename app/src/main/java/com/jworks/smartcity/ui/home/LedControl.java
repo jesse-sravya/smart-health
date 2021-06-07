@@ -9,12 +9,17 @@ import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.UUID;
 
 import com.jworks.smartcity.MainActivity;
@@ -22,13 +27,15 @@ import com.jworks.smartcity.R;
 
 public class LedControl extends AppCompatActivity {
 
-    Button btn1, btn2, btn3, btn4, btn5, btnDis;
+    Button btn1, btnDis, receiveButton;
     String address = null;
     TextView lumn;
     private ProgressDialog progress;
     BluetoothAdapter myBluetooth = null;
     BluetoothSocket btSocket = null;
     private boolean isBtConnected = false;
+    TextView receivedTextInput;
+    String receivedText = "";
     static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     @Override
@@ -41,13 +48,10 @@ public class LedControl extends AppCompatActivity {
         address = intent.getStringExtra(HomeFragment.EXTRA_ADDRESS);
 
         btn1 =  findViewById(R.id.button2);
-        btn2 =  findViewById(R.id.button3);
-        //For additional actions to be performed
-        btn3 =  findViewById(R.id.button5);
-        btn4 =  findViewById(R.id.button6);
-        btn5 =  findViewById(R.id.button7);
         btnDis = findViewById(R.id.button4);
+        receivedTextInput = findViewById(R.id.textViewReceived);
         lumn =  findViewById(R.id.textView2);
+        receiveButton = findViewById(R.id.button3);
 
         new LedControl.ConnectBT().execute();
 
@@ -58,40 +62,22 @@ public class LedControl extends AppCompatActivity {
             }
         });
 
-        btn2.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick (View v) {
-                sendSignal("2");
-            }
-        });
-
-        btn3.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick (View v) {
-                sendSignal("3");
-            }
-        });
-
-        btn4.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick (View v) {
-                sendSignal("4");
-            }
-        });
-
-        btn5.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick (View v) {
-                sendSignal("5");
-            }
-        });
+//        getDataFromDevice();
 
         btnDis.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick (View v) {
-                Disconnect();
+                disconnect();
             }
         });
+
+        receiveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick (View v) {
+                getDataFromDevice();
+            }
+        });
+
     }
 
     private void sendSignal ( String number ) {
@@ -104,7 +90,7 @@ public class LedControl extends AppCompatActivity {
         }
     }
 
-    private void Disconnect () {
+    private void disconnect() {
         if ( btSocket!=null ) {
             try {
                 btSocket.close();
@@ -114,6 +100,49 @@ public class LedControl extends AppCompatActivity {
         }
 
         finish();
+    }
+
+    private void getDataFromDevice() {
+        byte[] buffer = new byte[256];  // buffer store for the stream
+        int bytes; // bytes returned from read()
+        try {
+            InputStream tmpIn = null;
+
+            // Get the BluetoothSocket input and output streams
+            tmpIn = btSocket.getInputStream();
+
+            DataInputStream mmInStream = new DataInputStream(tmpIn);
+
+            // Read from the InputStream
+//            while (true) {
+//                bytes = mmInStream.read(buffer);
+//
+//                String readMessage = new String(buffer, 0, bytes);
+//                // Send the obtained bytes to the UI Activity
+//
+//                receivedTextInput.setText(readMessage);
+//                Log.i("DATA---", readMessage);
+//            }
+
+            int limit = 2000;
+            int counter = 0;
+            while (counter < limit) {
+                counter++;
+                bytes = mmInStream.read(buffer);
+
+//                String readMessage = new String(buffer, 0, bytes);
+                // Send the obtained bytes to the UI Activity
+
+//                if (readMessage.length() > 0) {
+//                    receivedTextInput.setText(readMessage);
+//                    Log.i("DATA---", readMessage);
+//                }
+            }
+            disconnect();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            disconnect();
+        }
     }
 
     private void msg (String s) {
@@ -160,4 +189,6 @@ public class LedControl extends AppCompatActivity {
             progress.dismiss();
         }
     }
+
+
 }

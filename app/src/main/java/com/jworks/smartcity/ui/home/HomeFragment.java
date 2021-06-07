@@ -1,13 +1,20 @@
 package com.jworks.smartcity.ui.home;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.ParcelUuid;
 import android.service.controls.Control;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,32 +28,56 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+import com.google.android.gms.maps.GoogleMap;
 
+
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.jworks.smartcity.R;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static android.R.layout.simple_list_item_1;
 import static android.bluetooth.BluetoothProfile.GATT;
+import static android.content.ContentValues.TAG;
+import static android.content.Context.LOCATION_SERVICE;
 
 public class HomeFragment extends Fragment {
+
+    private static final String FINE_LOCATION = android.Manifest.permission.ACCESS_FINE_LOCATION;
+    private static final String COARSE_LOCATION = android.Manifest.permission.ACCESS_COARSE_LOCATION;
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1234;
+
 
     private HomeViewModel homeViewModel;
     private static final int REQUEST_ENABLE_BT = 0;
     private static final int REQUEST_DISCOVER_BT = 0;
-    public static String EXTRA_ADDRESS = "device_address";
+    private static final int REQUEST_GPS_CODE_PERMISSION = 2;
+    String mGPSPermission = Manifest.permission.ACCESS_FINE_LOCATION;
+
+    public static String EXTRA_ADDRESS = "H-C-2010-06-01, 00:18:91:D8:0D:B4";
+
+    public static final String DEVICE_EXTRA = "SOCKET";
 
 
-    TextView mPairedTv, bluetoothOnStatus;
-    Button mOnBtn, mDiscoverBtn, mPairedBtn;
+
+    TextView mPairedTv, bluetoothOnStatus, mGPSOnStatus;
+    Button mBluetooothOnBtn, mDiscoverBtn, mPairedBtn, mGPSOnButton;
     ListView devicelist;
 
     private BluetoothAdapter mBlueAdapter;
     private Set<BluetoothDevice> pairedDevices;
+
+    private GoogleMap googleMap;
 
 
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -64,11 +95,13 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        mOnBtn        = getView().findViewById(R.id.onBtn);
+        mBluetooothOnBtn        = getView().findViewById(R.id.bluetoothOnBtn);
+        mGPSOnButton  = getView().findViewById(R.id.GPSOnBtn);
         mDiscoverBtn  = getView().findViewById(R.id.discoverableBtn);
         mPairedBtn    = getView().findViewById(R.id.pairedBtn);
         mPairedTv     = getView().findViewById(R.id.pairedTv);
         bluetoothOnStatus = getView().findViewById(R.id.bluetoothOnStatus);
+        mGPSOnStatus = getView().findViewById(R.id.GPSOnStatus);
 
         // bluetooth adapter
         mBlueAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -78,7 +111,7 @@ public class HomeFragment extends Fragment {
         updateBluetoothStatus();
 
         // on btn click
-        mOnBtn.setOnClickListener(new View.OnClickListener() {
+        mBluetooothOnBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (!mBlueAdapter.isEnabled()){
@@ -90,6 +123,14 @@ public class HomeFragment extends Fragment {
                 } else {
                     showToast("Bluetooth is already on");
                 }
+            }
+        });
+
+        // on btn click
+        mGPSOnButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                getLocationPermission();
             }
         });
 
@@ -110,13 +151,13 @@ public class HomeFragment extends Fragment {
             @Override
             public void onClick(View v) {
                 if (mBlueAdapter.isEnabled()){
-                    mPairedTv.setText("Paired Devices");
-                    Set<BluetoothDevice> devices = mBlueAdapter.getBondedDevices();
-                    for (BluetoothDevice device: devices){
-                        mPairedTv.append("\nDevice: " + device.getName() + ", " + device);
-                    }
+//                    mPairedTv.setText("Paired Devices");
+//                    Set<BluetoothDevice> devices = mBlueAdapter.getBondedDevices();
+//                    for (BluetoothDevice device: devices){
+//                        mPairedTv.append("\nDevice: " + device.getName() + ", " + device);
+//                    }
 
-//                    pairedDevicesList();
+                    pairedDevicesList();
 
 //                    BluetoothManager bluetoothManager = (BluetoothManager) getActivity().getSystemService(Context.BLUETOOTH_SERVICE);
 //                    List<BluetoothDevice> devices = bluetoothManager.getConnectedDevices(BluetoothProfile.GATT_SERVER);
@@ -148,34 +189,128 @@ public class HomeFragment extends Fragment {
 
         final ArrayAdapter adapter = new ArrayAdapter(getContext(), simple_list_item_1, list);
         devicelist.setAdapter(adapter);
-        devicelist.setOnItemClickListener(myListClickListener);
+        devicelist.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Log.d("------------", String.valueOf(position));
+
+                BluetoothDevice device = null;
+                int deviceCounter = 0;
+                for ( BluetoothDevice bt : pairedDevices ) {
+                    if (deviceCounter == position) {
+                        device = bt;
+                        break;
+                    }
+                    deviceCounter++;
+                }
+
+//                showToast("Found device "+ showUUID(device).length());
+
+                Intent intent = new Intent(getContext(), MonitoringScreen.class);
+                intent.putExtra(DEVICE_EXTRA, device);
+                startActivity(intent);
+            }
+        });
     }
 
-    private AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
-        @Override
-        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            String info = ((TextView) view).getText().toString();
-            String address = info.substring(info.length()-17);
 
-            Intent i = new Intent(getContext(), LedControl.class);
-            i.putExtra(EXTRA_ADDRESS, address);
-            startActivity(i);
-        }
-    };
+
     private void updateBluetoothStatus() {
         // set according to bluetooth status(on/off)
         if (mBlueAdapter.isEnabled()) {
             bluetoothOnStatus.setVisibility(View.VISIBLE);
-            mOnBtn.setVisibility(View.GONE);
+            mBluetooothOnBtn.setVisibility(View.GONE);
         } else {
             bluetoothOnStatus.setVisibility(View.GONE);
-            mOnBtn.setVisibility(View.VISIBLE);
+            mBluetooothOnBtn.setVisibility(View.VISIBLE);
         }
     }
+
+    private void updateGPSStatus() {
+        if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            mGPSOnStatus.setVisibility(View.GONE);
+            mGPSOnButton.setVisibility(View.VISIBLE);
+            showToast("not granted");
+        } else {
+            mGPSOnStatus.setVisibility(View.VISIBLE);
+            mGPSOnButton.setVisibility(View.GONE);
+            showToast("granted");
+
+        }
+    }
+
+
+    private void setUpMap() {
+        LocationManager locationManager = (LocationManager) getActivity().getSystemService(LOCATION_SERVICE);
+
+        try {
+            Location myLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+            if (myLocation != null) {
+                Log.d("TAG", "Not null");
+            }
+            else {
+                Log.d("TAG", "NULL");
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, new LocationListener() {
+                    @Override
+                    public void onLocationChanged(@NonNull Location location) {
+                        showToast("location changed");
+                    }
+                });
+            }
+        }
+        catch (SecurityException se) {
+            Log.d("TAG", "SE CAUGHT");
+            se.printStackTrace();
+        }
+    }
+
+    private void getLocationPermission() {
+//        String permissions[] = {android.Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION};
+//
+//        Log.d(TAG, "getLocationPermission: before if condition");
+//        if (ContextCompat.checkSelfPermission(getContext(),
+//
+//                FINE_LOCATION) == PackageManager.PERMISSION_GRANTED){
+//            if  (ContextCompat.checkSelfPermission(getContext(),
+//                    COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED){
+//                Log.d(TAG, "getLocationPermission: calling init");
+//            } else {
+//                ActivityCompat.requestPermissions(getActivity(),
+//                        permissions,
+//                        LOCATION_PERMISSION_REQUEST_CODE);
+//            }
+//        } else {
+//            ActivityCompat.requestPermissions(getActivity(),
+//                    permissions,
+//                    LOCATION_PERMISSION_REQUEST_CODE);
+//
+//        }
+//
+//        updateGPSStatus();
+            showToast("fetching ...");
+            if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                            PackageManager.PERMISSION_GRANTED) {
+                showToast("fetched gps");
+                return;
+            }
+
+            ActivityCompat.requestPermissions(getActivity(), new String[] {
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION },
+                    LOCATION_PERMISSION_REQUEST_CODE);
+            showToast("error fetching gps");
+    }
+
 
 
     //toast message function
     private void showToast(String msg){
         Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
     }
+
+
 }
